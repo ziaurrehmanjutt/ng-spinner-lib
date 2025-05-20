@@ -2,7 +2,7 @@ import { Component, ElementRef, EventEmitter, Inject, Input, OnChanges, Output, 
 import { NgSpinnerWheelService } from './ng-spinner-wheel.service';
 // import { NgSpinnerWheelService } from 'ng-spinner-wheel';
 
-interface MenuItems {
+export interface MenuItems {
   menuTitle: string;
   Id?: string;
   menuWeight?: number;
@@ -36,7 +36,7 @@ export class NgSpinnerWheelComponent implements OnChanges {
   @Input("allItems") allItems: MenuItems[] = [];
   @Input("btnWidth") public btnWidth: number = 30;
   @Input("width") public width: number = 260;
-  @Output() spinCompleted = new EventEmitter<any>();
+  @Output() spinCompleted = new EventEmitter<MenuItems>();
   private center!: number;
   private deg: number = 0;
   private speed: number = 10;
@@ -77,7 +77,7 @@ export class NgSpinnerWheelComponent implements OnChanges {
   }
 
   async loadDataInit() {
-    const totalWeight = this.allItems.reduce((sum: number, item: any) => sum + parseInt(item.menu_weightage), 0);
+    const totalWeight = this.allItems.reduce((sum: number, item: MenuItems) => sum + (item.menuWeight ?? 1), 0);
     await this.allItems.forEach((element: MenuItems) => {
 
 
@@ -97,6 +97,8 @@ export class NgSpinnerWheelComponent implements OnChanges {
     });
 
     this.allItems = this.shuffleArray(this.allItems);
+
+    console.log(this.allItems);
   }
 
   startSpin() {
@@ -251,7 +253,7 @@ export class NgSpinnerWheelComponent implements OnChanges {
 
   createSpinner() {
     this.setFontSize();
-    let slicesData = this.allItems as any;
+    let slicesData = this.allItems;
     const ctx = this.ctx;
     const width = this.width;
     const center = width / 2;

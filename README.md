@@ -1,27 +1,82 @@
-# NgSpinnerLib
+ #### ng-spinner-wheel
+A lightweight, customizable standalone Angular spinner wheel component.
 
-This project was generated with [Angular CLI](https://github.com/angular/angular-cli) version 18.1.3.
+---
 
-## Development server
+## 📦 Installation
 
-Run `ng serve` for a dev server. Navigate to `http://localhost:4200/`. The application will automatically reload if you change any of the source files.
+### Install from npm (once published):
+```
+npm install ng-spinner-wheel
+```
+---
+## 🧩 How to Use
 
-## Code scaffolding
+### In your parent component:
 
-Run `ng generate component component-name` to generate a new component. You can also use `ng generate directive|pipe|service|class|guard|interface|enum|module`.
+```typescript
+import { Component, ViewChild } from '@angular/core';
+import { NgSpinnerWheelComponent } from 'ng-spinner-wheel';
 
-## Build
+@Component({
+  selector: 'app-root',
+  standalone: true,
+  imports: [NgSpinnerWheelComponent],
+  templateUrl: './app.component.html'
+})
+export class AppComponent {
+  allItems = [
+    { label: 'Item 1', value: 1 },
+    { label: 'Item 2', value: 2 }
+  ];
 
-Run `ng build` to build the project. The build artifacts will be stored in the `dist/` directory.
+  @ViewChild('spinner') spinnerRef!: NgSpinnerWheelComponent;
 
-## Running unit tests
+  updateItems() {
+    this.allItems = [...this.allItems, { label: 'Item 3', value: 3 }];
+    setTimeout(() => {
+      this.spinnerRef.regenerate();
+    });
+  }
 
-Run `ng test` to execute the unit tests via [Karma](https://karma-runner.github.io).
+  handleSpinCompleted(item: any) {
+    console.log('Spin result:', item);
+  }
+}  
+```
+###  In your template:
+```
+<lib-ng-spinner-wheel
+  #spinner
+  [btnWidth]="60"
+  [allItems]="allItems"
+  (spinCompleted)="handleSpinCompleted($event)">
+</lib-ng-spinner-wheel>
 
-## Running end-to-end tests
+<button (click)="updateItems()">Update Spinner</button>
+```
 
-Run `ng e2e` to execute the end-to-end tests via a platform of your choice. To use this command, you need to first add a package that implements end-to-end testing capabilities.
+###  🔧 Inputs
 
-## Further help
+```
+allItems: MenuItems[] – Array of objects to spin
+btnWidth: number – Width of the spin button in pixels
 
-To get more help on the Angular CLI use `ng help` or go check out the [Angular CLI Overview and Command Reference](https://angular.dev/tools/cli) page.
+MenuItems {
+  menuTitle: string;
+  Id?: string;
+  menuWeight?: number;
+  percentage?: number;
+  backColor?: string;
+  fontSize?: string;
+  textColor?: string;
+}
+```
+### 📢 Output Events
+```
+spinCompleted: EventEmitter<MenuItems> – Emits the selected item when spin completes
+```
+### 🛠️ Public Methods
+```
+regenerate() – Re-initializes the spinner based on current inputs
+```

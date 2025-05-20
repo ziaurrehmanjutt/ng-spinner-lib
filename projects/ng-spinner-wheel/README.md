@@ -1,5 +1,4 @@
-ng-spinner-wheel
-
+ #### ng-spinner-wheel
 A lightweight, customizable standalone Angular spinner wheel component.
 
 ---
@@ -7,15 +6,15 @@ A lightweight, customizable standalone Angular spinner wheel component.
 ## 📦 Installation
 
 ### Install from npm (once published):
-
+```
 npm install ng-spinner-wheel
-
-
+```
+---
 ## 🧩 How to Use
 
 ### In your parent component:
 
-```
+```typescript
 import { Component, ViewChild } from '@angular/core';
 import { NgSpinnerWheelComponent } from 'ng-spinner-wheel';
 
@@ -60,18 +59,24 @@ export class AppComponent {
 ###  🔧 Inputs
 
 ```
-allItems: any[] – Array of objects to spin
+allItems: MenuItems[] – Array of objects to spin
 btnWidth: number – Width of the spin button in pixels
+
+MenuItems {
+  menuTitle: string;
+  Id?: string;
+  menuWeight?: number;
+  percentage?: number;
+  backColor?: string;
+  fontSize?: string;
+  textColor?: string;
+}
 ```
 ### 📢 Output Events
 ```
-spinCompleted: EventEmitter<any> – Emits the selected item when spin completes
+spinCompleted: EventEmitter<MenuItems> – Emits the selected item when spin completes
 ```
 ### 🛠️ Public Methods
 ```
 regenerate() – Re-initializes the spinner based on current inputs
 ```
-
-
-
-
