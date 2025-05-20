@@ -1,29 +1,7 @@
 {
   "name": "ng-spinner-wheel",
-  "version": "1.0.7",
+  "version": "1.1.0",
   "description": "A customizable standalone Angular spinner wheel component that supports weighted items. Useful for raffles, lucky draws, and gamified selections where some items have higher chances of winning.",
-  "keywords": [
-    "angular",
-    "spinner",
-    "wheel",
-    "lucky draw",
-    "roulette",
-    "random picker",
-    "weighted spinner",
-    "angular component",
-    "game wheel",
-    "prize wheel",
-    "angular library",
-    "standalone component",
-    "angular spinner"
-  ],
-  "peerDependencies": {
-    "@angular/common": "^18.2.0",
-    "@angular/core": "^18.2.0"
-  },
-  "dependencies": {
-    "tslib": "^2.3.0"
-  },
   "author": {
     "name": "Zia",
     "email": "your@email.com",
@@ -35,8 +13,27 @@
     "type": "git",
     "url": "https://github.com/ziaurrehmanjutt/ng-spinner-lib.git"
   },
+  "keywords": [
+    "angular",
+    "spinner",
+    "wheel",
+    "lucky draw",
+    "roulette",
+    "random picker",
+    "weighted spinner",
+    "game wheel",
+    "prize wheel",
+    "angular spinner"
+  ],
   "bugs": {
     "url": "https://github.com/ziaurrehmanjutt/ng-spinner-lib/issues"
+  },
+  "peerDependencies": {
+    "@angular/common": "^18.2.0",
+    "@angular/core": "^18.2.0"
+  },
+  "dependencies": {
+    "tslib": "^2.3.0"
   },
   "sideEffects": false
 }

@@ -3,6 +3,5 @@
   "dest": "../../dist/ng-spinner-wheel",
   "lib": {
     "entryFile": "src/public-api.ts"
-  },
-  "assets": ["./assets/**/*"]
+  }
 }

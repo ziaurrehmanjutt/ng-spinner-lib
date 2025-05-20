@@ -16,7 +16,7 @@ npm install ng-spinner-wheel
 
 ```typescript
 import { Component, ViewChild } from '@angular/core';
-import { NgSpinnerWheelComponent } from 'ng-spinner-wheel';
+import { MenuItems, NgSpinnerWheelComponent } from 'ng-spinner-wheel';
 
 @Component({
   selector: 'app-root',
@@ -25,15 +25,15 @@ import { NgSpinnerWheelComponent } from 'ng-spinner-wheel';
   templateUrl: './app.component.html'
 })
 export class AppComponent {
-  allItems = [
-    { label: 'Item 1', value: 1 },
-    { label: 'Item 2', value: 2 }
-  ];
+ allItems:MenuItems[] = [
+    { menuTitle: 'Gold' , menuWeight:2},
+    { menuTitle: 'Gold s' , menuWeight:2}
+];
 
-  @ViewChild('spinner') spinnerRef!: NgSpinnerWheelComponent;
+ @ViewChild('spinner') spinnerRef!: NgSpinnerWheelComponent;
 
   updateItems() {
-    this.allItems = [...this.allItems, { label: 'Item 3', value: 3 }];
+    this.allItems = [...this.allItems, { menuTitle: 'Item 3', menuWeight: 6 }];
     setTimeout(() => {
       this.spinnerRef.regenerate();
     });
