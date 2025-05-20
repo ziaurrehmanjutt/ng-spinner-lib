@@ -1,24 +1,77 @@
-# NgSpinnerWheel
+ng-spinner-wheel
 
-This library was generated with [Angular CLI](https://github.com/angular/angular-cli) version 18.2.0.
+A lightweight, customizable standalone Angular spinner wheel component.
 
-## Code scaffolding
+---
 
-Run `ng generate component component-name --project ng-spinner-wheel` to generate a new component. You can also use `ng generate directive|pipe|service|class|guard|interface|enum|module --project ng-spinner-wheel`.
-> Note: Don't forget to add `--project ng-spinner-wheel` or else it will be added to the default project in your `angular.json` file. 
+## 📦 Installation
 
-## Build
+### Install from npm (once published):
 
-Run `ng build ng-spinner-wheel` to build the project. The build artifacts will be stored in the `dist/` directory.
+npm install ng-spinner-wheel
 
-## Publishing
 
-After building your library with `ng build ng-spinner-wheel`, go to the dist folder `cd dist/ng-spinner-wheel` and run `npm publish`.
+## 🧩 How to Use
 
-## Running unit tests
+### In your parent component:
 
-Run `ng test ng-spinner-wheel` to execute the unit tests via [Karma](https://karma-runner.github.io).
+```
+import { Component, ViewChild } from '@angular/core';
+import { NgSpinnerWheelComponent } from 'ng-spinner-wheel';
 
-## Further help
+@Component({
+  selector: 'app-root',
+  standalone: true,
+  imports: [NgSpinnerWheelComponent],
+  templateUrl: './app.component.html'
+})
+export class AppComponent {
+  allItems = [
+    { label: 'Item 1', value: 1 },
+    { label: 'Item 2', value: 2 }
+  ];
 
-To get more help on the Angular CLI use `ng help` or go check out the [Angular CLI Overview and Command Reference](https://angular.dev/tools/cli) page.
+  @ViewChild('spinner') spinnerRef!: NgSpinnerWheelComponent;
+
+  updateItems() {
+    this.allItems = [...this.allItems, { label: 'Item 3', value: 3 }];
+    setTimeout(() => {
+      this.spinnerRef.regenerate();
+    });
+  }
+
+  handleSpinCompleted(item: any) {
+    console.log('Spin result:', item);
+  }
+}  
+```
+###  In your template:
+```
+<lib-ng-spinner-wheel
+  #spinner
+  [btnWidth]="60"
+  [allItems]="allItems"
+  (spinCompleted)="handleSpinCompleted($event)">
+</lib-ng-spinner-wheel>
+
+<button (click)="updateItems()">Update Spinner</button>
+```
+
+###  🔧 Inputs
+
+```
+allItems: any[] – Array of objects to spin
+btnWidth: number – Width of the spin button in pixels
+```
+### 📢 Output Events
+```
+spinCompleted: EventEmitter<any> – Emits the selected item when spin completes
+```
+### 🛠️ Public Methods
+```
+regenerate() – Re-initializes the spinner based on current inputs
+```
+
+
+
+

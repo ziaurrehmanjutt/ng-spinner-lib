@@ -1,6 +1,17 @@
-import { Component, ElementRef, EventEmitter, Inject, Input, Output, ViewChild } from '@angular/core';
+import { Component, ElementRef, EventEmitter, Inject, Input, OnChanges, Output, SimpleChanges, ViewChild } from '@angular/core';
 import { NgSpinnerWheelService } from './ng-spinner-wheel.service';
 // import { NgSpinnerWheelService } from 'ng-spinner-wheel';
+
+interface MenuItems {
+  menuTitle: string;
+  Id?: string;
+  menuWeight?: number;
+  percentage?: number;
+  backColor?: string;
+  fontSize?: string;
+  textColor?: string;
+}
+
 @Component({
   selector: 'lib-ng-spinner-wheel',
   standalone: true,
@@ -12,22 +23,20 @@ import { NgSpinnerWheelService } from './ng-spinner-wheel.service';
 
         <div>
           <img [style.height]="btnWidth+'px'" [style.width]="btnWidth+'px'" [style.top]="(width/2)-(btnWidth/2)+'px'"
-            [style.left]="(width/2)-(btnWidth/2)+'px'" style="position: absolute;" (click)="startSpin()" src="assets/spin.png" />
+            [style.left]="(width/2)-(btnWidth/2)+'px'" style="position: absolute;" (click)="startSpin()" src="https://i.postimg.cc/hj1XkSfG/spin.png" />
         </div>
       </div>
     </div>
   `,
   styles: ``
 })
-export class NgSpinnerWheelComponent {
-
-  @Input("allItems") allItems: any = []
-
-  @ViewChild('canvas') canvasEl!: ElementRef;
+export class NgSpinnerWheelComponent implements OnChanges {
   private ctx!: CanvasRenderingContext2D | null;
-
+  @ViewChild('canvas') canvasEl!: ElementRef;
+  @Input("allItems") allItems: MenuItems[] = [];
   @Input("btnWidth") public btnWidth: number = 30;
   @Input("width") public width: number = 260;
+  @Output() spinCompleted = new EventEmitter<any>();
   private center!: number;
   private deg: number = 0;
   private speed: number = 10;
@@ -40,14 +49,12 @@ export class NgSpinnerWheelComponent {
   private fontSize = 15;
   private forceStop = false;
 
-  //  constructor(@Inject(SpinningWheelService) public util: SpinningWheelService) { }
   constructor(public util: NgSpinnerWheelService) { }
   async ngAfterViewInit(): Promise<void> {
+    this.regenerate();
+  }
 
-
-
-
-    console.log(this.allItems);
+  public regenerate() {
     setTimeout(() => {
       this.onInIt2();
       this.loadDataInit();
@@ -55,6 +62,11 @@ export class NgSpinnerWheelComponent {
     }, 1000);
   }
 
+  ngOnChanges(changes: SimpleChanges): void {
+    if (changes['allItems']) {
+      this.regenerate();
+    }
+  }
 
   onInIt2() {
     this.canvas = this.canvasEl.nativeElement;
@@ -66,13 +78,22 @@ export class NgSpinnerWheelComponent {
 
   async loadDataInit() {
     const totalWeight = this.allItems.reduce((sum: number, item: any) => sum + parseInt(item.menu_weightage), 0);
-    await this.allItems.forEach((element: any) => {
+    await this.allItems.forEach((element: MenuItems) => {
 
 
-      element.percentage = ((element.menu_weightage / totalWeight) * 100).toFixed(2);
-      element.menu_weightage = parseInt(element.menu_weightage);
-      element.color = this.util.getRandomColor();
-      element.textColor = this.util.getTextColor(element.color);
+      if (!element.menuWeight) element.menuWeight = 1;
+
+      element.percentage = ((element.menuWeight / totalWeight) * 100)
+      if (!element.backColor) {
+        element.backColor = this.util.getRandomColor();
+      }
+      if (!element.textColor) {
+        element.textColor = this.util.getTextColor(element.backColor);
+      }
+
+      if (!element.fontSize) {
+        element.fontSize = "15px";
+      }
     });
 
     this.allItems = this.shuffleArray(this.allItems);
@@ -97,9 +118,9 @@ export class NgSpinnerWheelComponent {
 
 
     let spin = () => {
-      let slicesData = this.allItems as any;
+      let slicesData = this.allItems;
       // const color = slicesData.map(slice => slice.color);
-      const label = slicesData.map((slice: any) => slice.menu_title);
+      const label = slicesData.map((slice: MenuItems) => slice.menuTitle);
       const slices = label.length;
       // const sliceDeg = 360 / slices;
 
@@ -138,32 +159,32 @@ export class NgSpinnerWheelComponent {
         const finalDeg = (360 - this.deg + 270) % 360; // 270 is the top pointer
         let angleAccumulator = 0;
         for (let slice of slicesData) {
-          const sliceAngle = slice.percentage * 3.6;
+
+          const sliceAngle = (slice.percentage ?? 0) * 3.6;
           if (finalDeg >= angleAccumulator && finalDeg < angleAccumulator + sliceAngle) {
             this.currentWinner = slice;
             break;
           }
           angleAccumulator += sliceAngle;
         }
-
-        console.log("Current is", this.currentWinner);
-        alert(this.currentWinner?.menu_title || 'No winner found!');
+        this.spinCompleted.emit(this.currentWinner);
+        // alert(this.currentWinner?.menu_title || 'No winner found!');
         return;
       }
 
       this.ctx?.clearRect(0, 0, this.width, this.width);
       this.currentWinner = null;
       let allTtl = this.deg;
-      slicesData.forEach((slice: any, i: number) => {
+      slicesData.forEach((slice: MenuItems, i: number) => {
         if (this.ctx) {
           this.ctx.beginPath();
-          this.ctx.fillStyle = slice.color;
+          this.ctx.fillStyle = slice.backColor || "#000000"
           this.ctx.moveTo(this.center, this.center);
-          this.ctx.arc(this.center, this.center, this.width / 2, this.deg2rad(this.deg), this.deg2rad(this.deg + (slice.percentage * 3.6)));
+          this.ctx.arc(this.center, this.center, this.width / 2, this.deg2rad(this.deg), this.deg2rad(this.deg + ((slice.percentage ?? 0) * 3.6)));
           this.ctx.lineTo(this.center, this.center);
           this.ctx.fill();
-          allTtl += (slice.percentage * 3.6);
-          const drawText_deg = this.deg + (slice.percentage * 3.6) / 2;
+          allTtl += ((slice.percentage ?? 0) * 3.6);
+          const drawText_deg = this.deg + ((slice.percentage ?? 0) * 3.6) / 2;
 
           // console.log(this.deg,this.deg%360,slice.menu_title);
           if ((allTtl % 360) > 270 && !this.currentWinner) {
@@ -174,8 +195,8 @@ export class NgSpinnerWheelComponent {
           this.ctx.translate(this.center, this.center);
           this.ctx.rotate(this.deg2rad(drawText_deg));
           this.ctx.textAlign = "right";
-          this.ctx.fillStyle = slice.textColor;
-          var textvalArr = this.toMultiLine(slice.menu_title);
+          this.ctx.fillStyle = slice.textColor || "#000000";;
+          var textvalArr = this.toMultiLine(slice.menuTitle);
           var linespacing = 15;
           var startX = (this.width / 2) - 10;
           var startY = 5;
@@ -188,7 +209,7 @@ export class NgSpinnerWheelComponent {
           // this.ctx.font = 'bold ' + this.fontSize + 'px sans-serif';
           // this.ctx.fillText(slice.menu_title, 100, 5);
           this.ctx.restore();
-          this.deg += (slice.percentage * 3.6);
+          this.deg += ((slice.percentage ?? 0) * 3.6);
         }
       });
 
@@ -211,6 +232,8 @@ export class NgSpinnerWheelComponent {
   rand(min: number, max: number): number {
     return Math.random() * (max - min) + min;
   }
+
+
 
   setFontSize() {
     const baseFontSize = this.width / 20; // adjust divisor as needed
@@ -239,15 +262,15 @@ export class NgSpinnerWheelComponent {
       const totalDegrees = 360;
       let currentDegrees = 0;
 
-      slicesData.forEach((slice: any) => {
-        const name = slice.menu_title;
-        const id = slice.id;
-        const degree = slice.percentage * 3.6;
-        const color = slice.color;
+      slicesData.forEach((slice: MenuItems) => {
+        const name = slice.menuTitle;
+        // const id = slice.id;
+        const degree = (slice.percentage ?? 0) * 3.6;
+        // const color = slice.color;
         // const { name, id, degree, color } = {1,1,1,1};
 
         ctx.beginPath();
-        ctx.fillStyle = color;
+        ctx.fillStyle = slice.backColor || "#000000";
         ctx.moveTo(center, center);
         ctx.arc(center, center, width / 2, this.deg2rad(currentDegrees), this.deg2rad(currentDegrees + degree));
         ctx.lineTo(center, center);
@@ -258,7 +281,7 @@ export class NgSpinnerWheelComponent {
         ctx.translate(center, center);
         ctx.rotate(this.deg2rad(drawText_deg));
         ctx.textAlign = "right";
-        ctx.fillStyle = slice.textColor;;
+        ctx.fillStyle = slice.textColor || "#000000";;
 
         ctx.font = `bold ${slice.fontSize} sans-serif`;
 
