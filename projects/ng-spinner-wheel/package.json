@@ -1,10 +1,10 @@
 {
   "name": "ng-spinner-wheel",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "A customizable standalone Angular spinner wheel component that supports weighted items. Useful for raffles, lucky draws, and gamified selections where some items have higher chances of winning.",
   "author": {
     "name": "Zia",
-    "email": "your@email.com",
+    "email": "ziaa520@gmail.com",
     "url": "https://github.com/ziaurrehmanjutt"
   },
   "license": "MIT",
