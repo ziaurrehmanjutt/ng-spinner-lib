@@ -2,6 +2,8 @@
 
 A lightweight, customizable standalone Angular spinner wheel with weighted items. Good for raffles, lucky draws, prize wheels and gamified selections (works in Ionic too).
 
+**[▶ Live demo](https://ng-spinner-wheel.netlify.app/)**
+
 - Standalone component, no NgModule needed
 - Weighted slices: heavier items get a bigger slice and a higher chance of winning
 - Canvas based, sharp on high-DPI screens, no external assets
