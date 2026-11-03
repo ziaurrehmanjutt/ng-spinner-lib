@@ -1,230 +1,268 @@
-import { Component, ElementRef, EventEmitter, Inject, Input, OnChanges, Output, SimpleChanges, ViewChild } from '@angular/core';
+import {
+  AfterViewInit,
+  Component,
+  ElementRef,
+  EventEmitter,
+  Input,
+  NgZone,
+  OnChanges,
+  OnDestroy,
+  Output,
+  SimpleChanges,
+  ViewChild
+} from '@angular/core';
 import { NgSpinnerWheelService } from './ng-spinner-wheel.service';
-// import { NgSpinnerWheelService } from 'ng-spinner-wheel';
 
 export interface MenuItems {
   menuTitle: string;
+  /** Optional identifier (kept for backwards compatibility, prefer `id`). */
   Id?: string;
+  id?: string;
+  /** Relative weight of the slice. Defaults to 1. */
   menuWeight?: number;
+  /** Computed by the wheel: share of the wheel in percent. */
   percentage?: number;
+  /** Slice colour. A random colour is picked when omitted. */
   backColor?: string;
+  /** CSS font size for the label, e.g. `'14px'`. Defaults to `'15px'`. */
   fontSize?: string;
+  /** Label colour. Chosen for contrast with `backColor` when omitted. */
   textColor?: string;
 }
 
+/** Angle (in degrees, canvas coordinates) where the pointer sits: the top of the wheel. */
+const POINTER_DEG = 270;
+/** Speed is expressed in degrees per 60fps frame so the feel is independent of the display refresh rate. */
+const FRAME_MS = 1000 / 60;
+const MAX_SPEED = 6;
+const ACCELERATION = 0.1;
+
 @Component({
   selector: 'lib-ng-spinner-wheel',
-  standalone: true,
   imports: [],
   template: `
-   <div id="wheel" class="ion-text-center">
-      <div style="position: relative;">
-        <canvas id="canvas" #canvas [width]="width" [height]="width"></canvas>
+    <div id="wheel" class="ion-text-center">
+      <div style="position: relative;" [style.width.px]="width" [style.height.px]="width">
+        <canvas #canvas [style.width.px]="width" [style.height.px]="width" role="img"
+          aria-label="Spinner wheel"></canvas>
 
-        <div>
-          <img [style.height]="btnWidth+'px'" [style.width]="btnWidth+'px'" [style.top]="(width/2)-(btnWidth/2)+'px'"
-            [style.left]="(width/2)-(btnWidth/2)+'px'" style="position: absolute;" (click)="startSpin()" src="https://i.postimg.cc/hj1XkSfG/spin.png" />
-        </div>
+        <button type="button" aria-label="Spin the wheel" (click)="startSpin()"
+          [style.height.px]="btnWidth" [style.width.px]="btnWidth"
+          [style.top.px]="(width / 2) - (btnWidth / 2)" [style.left.px]="(width / 2) - (btnWidth / 2)"
+          [style.font-size.px]="btnWidth * 0.3"
+          style="position: absolute; padding: 0; border: 2px solid #fff; border-radius: 50%; cursor: pointer;
+                 background: #333; color: #fff; font-weight: bold; line-height: 1; overflow: hidden;">
+          @if (btnImage) {
+            <img [src]="btnImage" alt="" style="width: 100%; height: 100%; object-fit: cover; display: block;" />
+          } @else {
+            SPIN
+          }
+        </button>
       </div>
     </div>
   `,
   styles: ``
 })
-export class NgSpinnerWheelComponent implements OnChanges {
-  private ctx!: CanvasRenderingContext2D | null;
-  @ViewChild('canvas') canvasEl!: ElementRef;
-  @Input("allItems") allItems: MenuItems[] = [];
-  @Input("btnWidth") public btnWidth: number = 30;
-  @Input("width") public width: number = 260;
-  @Output() spinCompleted = new EventEmitter<MenuItems>();
-  private center!: number;
-  private deg: number = 0;
-  private speed: number = 10;
-  private isStopped: boolean = false;
-  private lock: boolean = false;
-  private isSpinning: boolean = false;
-  private slowDownRand: number = 0;
-  private canvas: any;
-  private currentWinner: any;
-  private fontSize = 15;
-  private forceStop = false;
+export class NgSpinnerWheelComponent implements OnChanges, AfterViewInit, OnDestroy {
+  @ViewChild('canvas', { static: true }) canvasEl!: ElementRef<HTMLCanvasElement>;
 
-  constructor(public util: NgSpinnerWheelService) { }
-  async ngAfterViewInit(): Promise<void> {
+  /** Items on the wheel. Missing weight/colour/font size are filled in on the objects you pass. */
+  @Input('allItems') allItems: MenuItems[] = [];
+  /** Diameter of the spin button in pixels. */
+  @Input('btnWidth') public btnWidth: number = 30;
+  /** Diameter of the wheel in pixels. */
+  @Input('width') public width: number = 260;
+  /** Optional image URL for the centre button. A built-in "SPIN" button is used when omitted. */
+  @Input() btnImage?: string;
+  /** Shuffle the slice order whenever items change. Defaults to true. */
+  @Input() shuffle: boolean = true;
+  /** Minimum time in ms before the wheel starts slowing down. */
+  @Input() minSpinTime: number = 5000;
+  /** Maximum time in ms before the wheel starts slowing down. */
+  @Input() maxSpinTime: number = 8500;
+  /** Emits the winning item when the wheel stops. */
+  @Output() spinCompleted = new EventEmitter<MenuItems>();
+
+  private ctx: CanvasRenderingContext2D | null = null;
+  private slices: MenuItems[] = [];
+  private deg = 0;
+  private speed = 0;
+  private slowDownRate = 0.98;
+  private isSpinning = false;
+  private isStopping = false;
+  private frameId: number | null = null;
+  private stopTimer: ReturnType<typeof setTimeout> | null = null;
+  private lastFrameTime = 0;
+  private viewReady = false;
+
+  constructor(public util: NgSpinnerWheelService, private zone: NgZone) { }
+
+  ngAfterViewInit(): void {
+    this.viewReady = true;
     this.regenerate();
   }
 
-  public regenerate() {
-    setTimeout(() => {
-      this.onInIt2();
-      this.loadDataInit();
-      this.createSpinner();
-    }, 1000);
-  }
-
   ngOnChanges(changes: SimpleChanges): void {
-    if (changes['allItems']) {
+    if (this.viewReady && (changes['allItems'] || changes['width'] || changes['shuffle'])) {
       this.regenerate();
     }
   }
 
-  onInIt2() {
-    this.canvas = this.canvasEl.nativeElement;
-    this.ctx = this.canvas.getContext('2d');
-    this.width = this.canvas.width;
-    this.center = this.width / 2;
-
+  ngOnDestroy(): void {
+    this.cancelAnimation();
   }
 
-  async loadDataInit() {
-    const totalWeight = this.allItems.reduce((sum: number, item: MenuItems) => sum + (item.menuWeight ?? 1), 0);
-    await this.allItems.forEach((element: MenuItems) => {
-
-
-      if (!element.menuWeight) element.menuWeight = 1;
-
-      element.percentage = ((element.menuWeight / totalWeight) * 100)
-      if (!element.backColor) {
-        element.backColor = this.util.getRandomColor();
-      }
-      if (!element.textColor) {
-        element.textColor = this.util.getTextColor(element.backColor);
-      }
-
-      if (!element.fontSize) {
-        element.fontSize = "15px";
-      }
-    });
-
-    this.allItems = this.shuffleArray(this.allItems);
-
-    console.log(this.allItems);
-  }
-
-  startSpin() {
-    if (this.lock || this.isStopped || this.isSpinning) {
+  /** Re-initialises the wheel from the current inputs. */
+  public regenerate(): void {
+    if (!this.viewReady) {
       return;
     }
-    const randomNumber = Math.floor(Math.random() * (8501 - 5000) + 5000);
-    setTimeout(() => {
-      this.stops();
-    }, randomNumber);
-    this.lock = false;
-    this.forceStop = false;
-    this.isStopped = false;
+    this.cancelAnimation();
+    this.setupCanvas();
+    this.prepareSlices();
+    this.draw();
+  }
+
+  /** Starts spinning. It stops by itself after a random time and emits `spinCompleted`. */
+  startSpin(): void {
+    if (this.isSpinning || this.slices.length === 0) {
+      return;
+    }
+    const min = Math.min(this.minSpinTime, this.maxSpinTime);
+    const max = Math.max(this.minSpinTime, this.maxSpinTime);
+    const duration = min + Math.random() * (max - min);
+
     this.isSpinning = true;
-    this.spin();
+    this.isStopping = false;
+    this.speed = MAX_SPEED / 2;
+    this.lastFrameTime = 0;
+
+    this.zone.runOutsideAngular(() => {
+      this.stopTimer = setTimeout(() => this.stops(), duration);
+      this.frameId = requestAnimationFrame(t => this.tick(t));
+    });
   }
 
-  spin() {
-
-
-    let spin = () => {
-      let slicesData = this.allItems;
-      // const color = slicesData.map(slice => slice.color);
-      const label = slicesData.map((slice: MenuItems) => slice.menuTitle);
-      const slices = label.length;
-      // const sliceDeg = 360 / slices;
-
-      this.deg += this.speed;
-      this.deg %= 360;
-
-      if (this.forceStop) {
-        this.lock = false;
-        this.isStopped = false;
-        this.isSpinning = false;
-        this.speed = 0;
-        return;
-      }
-      // Increment speed
-      if (!this.isStopped && this.speed < 6) {
-        this.speed = this.speed + 1 * 0.1;
-      }
-
-      // Decrement Speed
-      if (this.isStopped) {
-        if (!this.lock) {
-          this.lock = true;
-          this.slowDownRand = this.rand(0.990, 0.970);
-        }
-        this.speed = this.speed > 0.2 ? this.speed *= this.slowDownRand : 0;
-      }
-
-
-
-      if (this.lock && !this.speed) {
-        this.lock = false;
-        this.isStopped = false;
-        this.isSpinning = false;
-
-        // Determine winner based on final degree
-        const finalDeg = (360 - this.deg + 270) % 360; // 270 is the top pointer
-        let angleAccumulator = 0;
-        for (let slice of slicesData) {
-
-          const sliceAngle = (slice.percentage ?? 0) * 3.6;
-          if (finalDeg >= angleAccumulator && finalDeg < angleAccumulator + sliceAngle) {
-            this.currentWinner = slice;
-            break;
-          }
-          angleAccumulator += sliceAngle;
-        }
-        this.spinCompleted.emit(this.currentWinner);
-        // alert(this.currentWinner?.menu_title || 'No winner found!');
-        return;
-      }
-
-      this.ctx?.clearRect(0, 0, this.width, this.width);
-      this.currentWinner = null;
-      let allTtl = this.deg;
-      slicesData.forEach((slice: MenuItems, i: number) => {
-        if (this.ctx) {
-          this.ctx.beginPath();
-          this.ctx.fillStyle = slice.backColor || "#000000"
-          this.ctx.moveTo(this.center, this.center);
-          this.ctx.arc(this.center, this.center, this.width / 2, this.deg2rad(this.deg), this.deg2rad(this.deg + ((slice.percentage ?? 0) * 3.6)));
-          this.ctx.lineTo(this.center, this.center);
-          this.ctx.fill();
-          allTtl += ((slice.percentage ?? 0) * 3.6);
-          const drawText_deg = this.deg + ((slice.percentage ?? 0) * 3.6) / 2;
-
-          // console.log(this.deg,this.deg%360,slice.menu_title);
-          if ((allTtl % 360) > 270 && !this.currentWinner) {
-            this.currentWinner = slice;
-          }
-
-          this.ctx.save();
-          this.ctx.translate(this.center, this.center);
-          this.ctx.rotate(this.deg2rad(drawText_deg));
-          this.ctx.textAlign = "right";
-          this.ctx.fillStyle = slice.textColor || "#000000";;
-          var textvalArr = this.toMultiLine(slice.menuTitle);
-          var linespacing = 15;
-          var startX = (this.width / 2) - 10;
-          var startY = 5;
-
-          for (var i = 0; i < textvalArr.length; i++) {
-            this.ctx.fillText(textvalArr[i], startX, startY, (this.width / 2) - 20);
-            startY += linespacing;
-          }
-
-          // this.ctx.font = 'bold ' + this.fontSize + 'px sans-serif';
-          // this.ctx.fillText(slice.menu_title, 100, 5);
-          this.ctx.restore();
-          this.deg += ((slice.percentage ?? 0) * 3.6);
-        }
-      });
-
-      window.requestAnimationFrame(() => spin());
-    };
-    spin();
-    //window.requestAnimationFrame(spin);
-  }
-  stops() {
-    if (!this.isSpinning || this.isStopped) {
+  /** Begins slowing the wheel down; it will land on a random slice. */
+  stops(): void {
+    if (!this.isSpinning || this.isStopping) {
       return;
     }
-    this.isStopped = true;
+    this.isStopping = true;
+    this.slowDownRate = this.rand(0.97, 0.99);
+  }
+
+  private tick(now: number): void {
+    const frames = this.lastFrameTime ? Math.min((now - this.lastFrameTime) / FRAME_MS, 5) : 1;
+    this.lastFrameTime = now;
+
+    if (this.isStopping) {
+      this.speed *= Math.pow(this.slowDownRate, frames);
+    } else if (this.speed < MAX_SPEED) {
+      this.speed = Math.min(MAX_SPEED, this.speed + ACCELERATION * frames);
+    }
+
+    if (this.isStopping && this.speed <= 0.2) {
+      this.speed = 0;
+      this.isSpinning = false;
+      this.isStopping = false;
+      this.frameId = null;
+      this.draw();
+      const winner = this.findWinner();
+      this.zone.run(() => this.spinCompleted.emit(winner));
+      return;
+    }
+
+    this.deg = (this.deg + this.speed * frames) % 360;
+    this.draw();
+    this.frameId = requestAnimationFrame(t => this.tick(t));
+  }
+
+  private cancelAnimation(): void {
+    if (this.frameId !== null) {
+      cancelAnimationFrame(this.frameId);
+      this.frameId = null;
+    }
+    if (this.stopTimer !== null) {
+      clearTimeout(this.stopTimer);
+      this.stopTimer = null;
+    }
+    this.isSpinning = false;
+    this.isStopping = false;
+    this.speed = 0;
+  }
+
+  private setupCanvas(): void {
+    const canvas = this.canvasEl.nativeElement;
+    const ratio = window.devicePixelRatio || 1;
+    canvas.width = this.width * ratio;
+    canvas.height = this.width * ratio;
+    this.ctx = canvas.getContext('2d');
+    this.ctx?.setTransform(ratio, 0, 0, ratio, 0, 0);
+  }
+
+  private prepareSlices(): void {
+    const items = this.allItems ?? [];
+    const totalWeight = items.reduce((sum, item) => sum + (item.menuWeight || 1), 0);
+
+    for (const item of items) {
+      item.menuWeight = item.menuWeight || 1;
+      item.percentage = (item.menuWeight / totalWeight) * 100;
+      item.backColor ||= this.util.getRandomColor();
+      item.textColor ||= this.util.getTextColor(item.backColor);
+      item.fontSize ||= '15px';
+    }
+
+    this.slices = this.shuffle ? this.shuffleArray(items) : [...items];
+  }
+
+  private draw(): void {
+    const ctx = this.ctx;
+    if (!ctx) {
+      return;
+    }
+    const size = this.width;
+    const center = size / 2;
+    ctx.clearRect(0, 0, size, size);
+
+    let start = this.deg;
+    for (const slice of this.slices) {
+      const angle = (slice.percentage ?? 0) * 3.6;
+
+      ctx.beginPath();
+      ctx.fillStyle = slice.backColor || '#000000';
+      ctx.moveTo(center, center);
+      ctx.arc(center, center, center, this.deg2rad(start), this.deg2rad(start + angle));
+      ctx.lineTo(center, center);
+      ctx.fill();
+
+      ctx.save();
+      ctx.translate(center, center);
+      ctx.rotate(this.deg2rad(start + angle / 2));
+      ctx.textAlign = 'right';
+      ctx.fillStyle = slice.textColor || '#000000';
+      ctx.font = `bold ${slice.fontSize || '15px'} sans-serif`;
+      let y = 5;
+      for (const line of this.toMultiLine(slice.menuTitle)) {
+        ctx.fillText(line, center - 10, y, center - 20);
+        y += 15;
+      }
+      ctx.restore();
+
+      start += angle;
+    }
+  }
+
+  private findWinner(): MenuItems {
+    const pointerAngle = (((POINTER_DEG - this.deg) % 360) + 360) % 360;
+    let accumulated = 0;
+    for (const slice of this.slices) {
+      accumulated += (slice.percentage ?? 0) * 3.6;
+      if (pointerAngle < accumulated) {
+        return slice;
+      }
+    }
+    return this.slices[this.slices.length - 1];
   }
 
   deg2rad(deg: number): number {
@@ -235,82 +273,12 @@ export class NgSpinnerWheelComponent implements OnChanges {
     return Math.random() * (max - min) + min;
   }
 
-
-
-  setFontSize() {
-    const baseFontSize = this.width / 20; // adjust divisor as needed
-
-    const itemCount = this.allItems?.length || 0;
-
-    if (itemCount <= 5) {
-      this.fontSize = baseFontSize;
-    } else if (itemCount <= 10) {
-      this.fontSize = baseFontSize * 0.8;
-    } else {
-      this.fontSize = baseFontSize * 0.6;
-    }
+  toMultiLine(text: string): string[] {
+    return (text ?? '').split(/\r?\n|\n\r/);
   }
-
-  createSpinner() {
-    this.setFontSize();
-    let slicesData = this.allItems;
-    const ctx = this.ctx;
-    const width = this.width;
-    const center = width / 2;
-
-    if (ctx) {
-      ctx.clearRect(0, 0, width, width);
-
-      const totalDegrees = 360;
-      let currentDegrees = 0;
-
-      slicesData.forEach((slice: MenuItems) => {
-        const name = slice.menuTitle;
-        // const id = slice.id;
-        const degree = (slice.percentage ?? 0) * 3.6;
-        // const color = slice.color;
-        // const { name, id, degree, color } = {1,1,1,1};
-
-        ctx.beginPath();
-        ctx.fillStyle = slice.backColor || "#000000";
-        ctx.moveTo(center, center);
-        ctx.arc(center, center, width / 2, this.deg2rad(currentDegrees), this.deg2rad(currentDegrees + degree));
-        ctx.lineTo(center, center);
-        ctx.fill();
-
-        const drawText_deg = currentDegrees + degree / 2;
-        ctx.save();
-        ctx.translate(center, center);
-        ctx.rotate(this.deg2rad(drawText_deg));
-        ctx.textAlign = "right";
-        ctx.fillStyle = slice.textColor || "#000000";;
-
-        ctx.font = `bold ${slice.fontSize} sans-serif`;
-
-        var textvalArr = this.toMultiLine(name);
-        var linespacing = 15;
-        var startX = (this.width / 2) - 5;
-        var startY = 5;
-
-        for (var i = 0; i < textvalArr.length; i++) {
-          ctx.fillText(textvalArr[i], startX, startY, (this.width / 2) - 20);
-          startY += linespacing;
-        }
-        ctx.restore();
-        currentDegrees += degree;
-      });
-    }
-  }
-  toMultiLine(text: string) {
-    var textArr = new Array();
-    text = text.replace(/\n\r?/g, '<br/>');
-    textArr = text.split("<br/>");
-    return textArr;
-  }
-
 
   shuffleArray<T>(array: T[]): T[] {
-    const shuffled = [...array]; // copy to avoid mutating original array
+    const shuffled = [...array];
     for (let i = shuffled.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
