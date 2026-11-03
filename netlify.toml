@@ -4,6 +4,8 @@
 
 [build.environment]
   NODE_VERSION = "24"
+  # Netlify's Angular plugin otherwise picks the first project (the library)
+  ANGULAR_PROJECT = "demo"
 
 [[redirects]]
   from = "/*"
