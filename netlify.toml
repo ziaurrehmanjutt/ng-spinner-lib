@@ -1,0 +1,11 @@
+[build]
+  command = "npm ci && npx ng build ng-spinner-wheel && npx ng build demo"
+  publish = "dist/demo/browser"
+
+[build.environment]
+  NODE_VERSION = "24"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
